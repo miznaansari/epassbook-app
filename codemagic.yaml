@@ -1,0 +1,100 @@
+# Codemagic CI/CD Configuration for passbook_app
+# Reference documentation: https://docs.codemagic.io/yaml/yaml-integration/
+
+workflows:
+  android-workflow:
+    name: Flutter Android Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1 # Using macOS instance allows building Android/iOS/Web, change to linux_x2 if building only Android for faster build times.
+    environment:
+      groups:
+        # Define environment variables groups in your Codemagic dashboard (e.g. keystore credentials)
+        # - keystore_credentials
+      vars:
+        PACKAGE_NAME: "com.fintrust.passbook.passbook_app"
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'developer'
+          include: true
+        - pattern: '*'
+          include: true
+    scripts:
+      - name: Set up local.properties
+        script: |
+          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+      - name: Static code analysis
+        script: |
+          flutter analyze
+      - name: Run unit tests
+        script: |
+          flutter test
+      - name: Build Android APK
+        script: |
+          flutter build apk --release
+      - name: Build Android App Bundle (AAB)
+        script: |
+          flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/**/*.aab
+    publishing:
+      email:
+        recipients:
+          # Add team email address for notifications
+          # - team@example.com
+          - admin@example.com
+        notify:
+          success: true
+          failure: true
+
+  ios-workflow:
+    name: Flutter iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        # Define iOS provisioning/certificate groups in Codemagic dashboard
+        # - ios_credentials
+      vars:
+        APP_STORE_APPLE_ID: 123456789 # Update with your App Store Apple ID
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+      - name: Install CocoaPods dependencies
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Build iOS IPA
+        script: |
+          # Note: If automatic code signing is enabled in Codemagic, it will sign the app automatically.
+          # For unsigned builds, run with --no-codesign:
+          flutter build ipa --release --no-codesign
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - admin@example.com
+        notify:
+          success: true
+          failure: true
