@@ -7,7 +7,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1 # Using macOS instance allows building Android/iOS/Web, change to linux_x2 if building only Android for faster build times.
     environment:
-      groups:
+      # groups:
         # Define environment variables groups in your Codemagic dashboard (e.g. keystore credentials)
         # - keystore_credentials
       vars:
@@ -66,7 +66,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
-      groups:
+      # groups:
         # Define iOS provisioning/certificate groups in Codemagic dashboard (e.g. App Store Connect API keys)
         # - ios_credentials
       vars:
