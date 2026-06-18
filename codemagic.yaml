@@ -98,6 +98,8 @@ workflows:
           flutter build ipa --release --no-codesign
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive
+      - build/ios/iphoneos/*.app
     publishing:
       email:
         recipients:
