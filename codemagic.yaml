@@ -15,6 +15,9 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      # Reference your Keystore configuration from Codemagic UI:
+      # android_signing:
+      #   - passbook_keystore
     triggering:
       events:
         - push
@@ -64,13 +67,17 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       groups:
-        # Define iOS provisioning/certificate groups in Codemagic dashboard
+        # Define iOS provisioning/certificate groups in Codemagic dashboard (e.g. App Store Connect API keys)
         # - ios_credentials
       vars:
         APP_STORE_APPLE_ID: 123456789 # Update with your App Store Apple ID
       flutter: stable
       xcode: latest
       cocoapods: default
+      # For automatic iOS signing, configure App Store Connect integration in Codemagic:
+      # ios_signing:
+      #   distribution_type: app_store
+      #   bundle_identifier: com.fintrust.passbook.passbookApp
     triggering:
       events:
         - push
