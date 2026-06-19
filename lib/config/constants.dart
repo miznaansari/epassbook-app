@@ -66,15 +66,9 @@ class AppConfig {
     }
   }
 
-  // Dynamic server url resolution: Android emulator vs iOS simulator vs Web
+  // Dynamic server url resolution: Production Vercel Server
   static String get baseUrl {
-    if (kIsWeb) {
-      return "http://localhost:3000";
-    }
-    if (Platform.isAndroid) {
-      return "http://10.0.2.2:3000";
-    }
-    return "http://localhost:3000";
+    return "https://epassbook-nextjs.vercel.app";
   }
 
   // Programmatic Firebase Initialization options

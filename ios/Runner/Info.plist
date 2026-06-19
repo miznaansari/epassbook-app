@@ -65,6 +65,17 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Google Sign-In URL Scheme (reversed Client ID). Replace with your actual reversed client ID from GoogleService-Info.plist -->
+				<string>com.googleusercontent.apps.187068233174-8ac0d4b1efb770b5d32077</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

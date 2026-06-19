@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../providers/stock_provider.dart';
 import '../chat/chat_screen.dart';
 import '../settings/settings_screen.dart';
 import '../entries/entry_form_sheet.dart';
+import '../reports/reports_screen.dart';
 import 'widgets/spending_chart_sheet.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -36,6 +38,7 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final dashboard = Provider.of<DashboardProvider>(context);
+    final stockProvider = Provider.of<StockProvider>(context);
     final user = auth.user;
     final kpis = dashboard.kpis;
     final currency = user?.currency ?? 'USD';
@@ -74,61 +77,7 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      drawer: Drawer(
-        backgroundColor: AppTheme.surface,
-        child: Column(
-          children: [
-            UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(
-                gradient: AppTheme.purpleGoldGradient,
-              ),
-              accountName: Text(user?.name ?? 'Guest User', style: const TextStyle(fontWeight: FontWeight.bold)),
-              accountEmail: Text(user?.email ?? 'guest@example.com'),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white24,
-                child: Text(
-                  (user?.name ?? 'G').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-              ),
-            ),
-            ListfulDrawerItem(
-              icon: Icons.chat_bubble_outline_rounded,
-              title: "AI Chat Assistant",
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ChatScreen()),
-                );
-              },
-            ),
-            ListfulDrawerItem(
-              icon: Icons.settings_outlined,
-              title: "Preferences & Settings",
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                );
-              },
-            ),
-            const Spacer(),
-            const Divider(color: AppTheme.border),
-            ListfulDrawerItem(
-              icon: Icons.logout_rounded,
-              title: "Log Out",
-              iconColor: AppTheme.roseRed,
-              onTap: () {
-                Navigator.pop(context);
-                auth.logout();
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+      drawer: null,
       body: RefreshIndicator(
         onRefresh: () => dashboard.fetchDashboard(auth),
         color: AppTheme.primaryPurple,
@@ -238,6 +187,99 @@ class DashboardScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              // STOCKS PORTFOLIO PERFORMANCE CARD
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.show_chart_rounded, color: AppTheme.cyanAdvance, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              "STOCKS PORTFOLIO",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (stockProvider.summary != null && stockProvider.summary!.totalInvested > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (stockProvider.summary!.totalReturns >= 0 ? AppTheme.emeraldGreen : AppTheme.roseRed).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: (stockProvider.summary!.totalReturns >= 0 ? AppTheme.emeraldGreen : AppTheme.roseRed).withOpacity(0.2),
+                              ),
+                            ),
+                            child: Text(
+                              "${stockProvider.summary!.totalReturns >= 0 ? '+' : ''}${stockProvider.summary!.totalReturnsPercentage.toStringAsFixed(1)}%",
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: stockProvider.summary!.totalReturns >= 0 ? AppTheme.emeraldGreen : AppTheme.roseRed,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (stockProvider.summary == null || stockProvider.summary!.totalInvested == 0)
+                      Column(
+                        children: [
+                          Text(
+                            "No stocks logged in your Groww portfolio ledger yet.",
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500, height: 1.4),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("PORTFOLIO VALUE", style: TextStyle(fontSize: 8, color: Colors.grey, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatCurrency(stockProvider.summary!.totalCurrentValue, currency),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text("INVESTED CAPITAL", style: TextStyle(fontSize: 8, color: Colors.grey, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatCurrency(stockProvider.summary!.totalInvested, currency),
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 20),
 
               // Quick Actions Cards (Stop SIP / Spending Analysis)
@@ -271,11 +313,9 @@ class DashboardScreen extends StatelessWidget {
                       icon: Icons.pie_chart_outline_rounded,
                       iconColor: AppTheme.primaryPurple,
                       onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          backgroundColor: Colors.transparent,
-                          isScrollControlled: true,
-                          builder: (context) => const SpendingChartSheet(),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ReportsScreen()),
                         );
                       },
                     ),

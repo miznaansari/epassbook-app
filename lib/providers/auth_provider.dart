@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 import '../config/constants.dart';
 
@@ -120,7 +121,21 @@ class AuthProvider extends ChangeNotifier {
         final fb.GoogleAuthProvider googleProvider = fb.GoogleAuthProvider();
         await _auth.signInWithPopup(googleProvider);
       } else {
-        throw UnsupportedError("Google Sign-In is only implemented on Web for now.");
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          scopes: ['email'],
+        );
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        if (googleUser != null) {
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final fb.OAuthCredential credential = fb.GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+          await _auth.signInWithCredential(credential);
+        } else {
+          _loading = false;
+          notifyListeners();
+        }
       }
     } catch (e) {
       _loading = false;
