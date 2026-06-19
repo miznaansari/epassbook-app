@@ -371,10 +371,8 @@ class _StockSearchScreenState extends State<StockSearchScreen> with SingleTicker
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  auth.user?.currency == 'INR' 
-                                      ? "₹${res['price']}" 
-                                      : "\$${res['price']}",
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                  res['type'] ?? 'Stock',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70, fontSize: 11),
                                 ),
                                 const SizedBox(height: 4),
                                 const Text("Click to Buy", style: TextStyle(color: AppTheme.primaryPurple, fontSize: 10, fontWeight: FontWeight.bold)),

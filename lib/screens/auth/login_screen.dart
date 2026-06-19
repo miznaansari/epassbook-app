@@ -300,36 +300,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // "OR" Divider
-                      const Row(
-                        children: [
-                          Expanded(child: Divider(color: AppTheme.border)),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text("OR", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                          Expanded(child: Divider(color: AppTheme.border)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Google Sign-In Button
-                      OutlinedButton.icon(
-                        onPressed: _isSubmitting ? null : _handleGoogleLogin,
-                        icon: const FaIcon(FontAwesomeIcons.google, size: 18, color: Colors.white),
-                        label: const Text(
-                          "Sign in with Google",
-                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppTheme.border, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: AppTheme.surface.withOpacity(0.4),
-                        ),
-                      ),
                       const SizedBox(height: 24),
 
                       // Signup link

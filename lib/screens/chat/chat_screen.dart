@@ -110,6 +110,29 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
         actions: [
+          Theme(
+            data: Theme.of(context).copyWith(
+              canvasColor: AppTheme.surface,
+            ),
+            child: DropdownButton<String>(
+              value: chatProvider.selectedModel,
+              dropdownColor: AppTheme.surface,
+              underline: const SizedBox(),
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primaryPurple, size: 16),
+              onChanged: (String? val) {
+                if (val != null) {
+                  chatProvider.setSelectedModel(val);
+                }
+              },
+              items: const [
+                DropdownMenuItem(value: 'gemini-3.1-flash-lite', child: Text('Gemini 3.1 Lite')),
+                DropdownMenuItem(value: 'gemini-2.5-flash', child: Text('Gemini 2.5 Flash')),
+                DropdownMenuItem(value: 'gemma-4-26b', child: Text('Gemma 4 26B')),
+                DropdownMenuItem(value: 'gemma-4-31b', child: Text('Gemma 4 31B')),
+              ],
+            ),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.forum_outlined, color: Colors.white),

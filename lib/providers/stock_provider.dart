@@ -60,12 +60,13 @@ class StockProvider extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/api/stocks/search?query=${Uri.encodeComponent(query)}'),
+        Uri.parse('${AppConfig.baseUrl}/api/stocks/search?q=${Uri.encodeComponent(query)}'),
         headers: auth.headers,
       );
 
       if (response.statusCode == 200) {
-        _searchResults = jsonDecode(response.body);
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        _searchResults = body['result'] ?? [];
       }
     } catch (e) {
       debugPrint("Error searching stocks: $e");
@@ -95,7 +96,8 @@ class StockProvider extends ChangeNotifier {
           'name': name,
           'quantity': quantity,
           'buyPrice': buyPrice,
-          'createExpense': createExpense,
+          'recordTransaction': createExpense,
+          'useSalaryBalance': false,
         }),
       );
 

@@ -9,16 +9,23 @@ class ChatProvider extends ChangeNotifier {
   List<ChatSession> _sessions = [];
   List<ChatMessage> _messages = [];
   String? _activeSessionId;
+  String _selectedModel = 'gemini-3.1-flash-lite';
   bool _loading = false;
 
   List<ChatSession> get sessions => _sessions;
   List<ChatMessage> get messages => _messages;
   String? get activeSessionId => _activeSessionId;
+  String get selectedModel => _selectedModel;
   bool get loading => _loading;
 
   void setActiveSession(String? sessionId) {
     _activeSessionId = sessionId;
     _messages = [];
+    notifyListeners();
+  }
+
+  void setSelectedModel(String modelId) {
+    _selectedModel = modelId;
     notifyListeners();
   }
 
@@ -150,6 +157,7 @@ class ChatProvider extends ChangeNotifier {
         body: jsonEncode({
           'messages': historyList,
           'sessionId': _activeSessionId,
+          'model': _selectedModel,
         }),
       );
 
