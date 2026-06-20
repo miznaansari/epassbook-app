@@ -14,6 +14,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
+    formats: const [BarcodeFormat.qrCode],
   );
   bool _isProcessing = false;
 
@@ -29,20 +30,26 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
 
-    final String? rawValue = barcodes.first.rawValue;
-    if (rawValue == null || rawValue.isEmpty) return;
+    final String? rawValue = barcodes.first.rawValue ?? barcodes.first.displayValue;
+    debugPrint("QR Scanner detected raw/display value: '$rawValue'");
+
+    if (rawValue == null || rawValue.trim().isEmpty) return;
+
+    final String trimmed = rawValue.trim();
+    final String normalized = trimmed.toLowerCase();
 
     // Check if it's a valid UPI URI
-    if (!rawValue.startsWith('upi://pay')) {
+    if (!normalized.startsWith('upi://pay')) {
+      debugPrint("Scanner error: Detected non-UPI QR code.");
       // Show error snackbar but limit toast flooding
       setState(() {
         _isProcessing = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid QR code. Please scan a valid UPI QR code."),
+        SnackBar(
+          content: Text("Invalid QR: '$trimmed'. Please scan a valid UPI QR code."),
           backgroundColor: AppTheme.roseRed,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
       Future.delayed(const Duration(seconds: 2), () {
@@ -62,11 +69,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
     // Parse parameters
     try {
-      final Uri uri = Uri.parse(rawValue);
-      final String? pa = uri.queryParameters['pa']; // UPI ID
-      final String? pn = uri.queryParameters['pn']; // Payee Name
-      final String? tn = uri.queryParameters['tn']; // Transaction Note
-      final String? amStr = uri.queryParameters['am']; // Amount
+      final Uri uri = Uri.parse(trimmed);
+      // Support both lowercase and uppercase parameters
+      final String? pa = uri.queryParameters['pa'] ?? uri.queryParameters['PA']; // UPI ID
+      final String? pn = uri.queryParameters['pn'] ?? uri.queryParameters['PN']; // Payee Name
+      final String? tn = uri.queryParameters['tn'] ?? uri.queryParameters['TN']; // Transaction Note
+      final String? amStr = uri.queryParameters['am'] ?? uri.queryParameters['AM']; // Amount
+
+      debugPrint("Parsed UPI details - pa: '$pa', pn: '$pn', tn: '$tn', am: '$amStr'");
 
       if (pa == null || pa.isEmpty) {
         throw Exception("Missing UPI ID (pa)");
@@ -91,6 +101,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         ),
       );
     } catch (e) {
+      debugPrint("Error parsing UPI details: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Error parsing UPI details: ${e.toString()}"),
@@ -166,14 +177,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           
           // Instruction text at bottom
           Positioned(
-            bottom: 60,
+            bottom: 40,
             left: 20,
             right: 20,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
               decoration: BoxDecoration(
-                color: AppTheme.surface.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(16),
+                color: AppTheme.surface.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppTheme.border),
                 boxShadow: [
                   BoxShadow(
@@ -183,10 +194,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   )
                 ]
               ),
-              child: const Column(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
+                  const Text(
                     "Align UPI QR inside the frame",
                     style: TextStyle(
                       fontSize: 14,
@@ -195,14 +206,48 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 4),
-                  Text(
+                  const SizedBox(height: 4),
+                  const Text(
                     "Supports GPay, PhonePe, Paytm, BHIM QR codes",
                     style: TextStyle(
                       fontSize: 11,
                       color: Colors.grey,
                     ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 14),
+                  TextButton.icon(
+                    onPressed: () {
+                      _controller.stop();
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const UPIPaymentDetailsScreen(
+                            upiId: '',
+                            payeeName: '',
+                            note: '',
+                            initialAmount: null,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                    label: const Text(
+                      "Enter Details Manually",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      backgroundColor: AppTheme.primaryPurple,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      minimumSize: const Size.fromHeight(40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ],
               ),

@@ -26,14 +26,21 @@ class UPIPaymentDetailsScreen extends StatefulWidget {
 
 class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
+  late TextEditingController _upiIdController;
+  late TextEditingController _payeeNameController;
   late TextEditingController _amountController;
   late TextEditingController _noteController;
   bool _useSalaryBalance = true;
   bool _isLoading = false;
+  String _selectedApp = 'upi'; // 'phonepe', 'gpay', 'paytm', 'upi'
 
   @override
   void initState() {
     super.initState();
+    _upiIdController = TextEditingController(text: widget.upiId);
+    _payeeNameController = TextEditingController(
+      text: widget.payeeName == 'Merchant/Payee' ? '' : widget.payeeName,
+    );
     _amountController = TextEditingController(
       text: widget.initialAmount != null ? widget.initialAmount!.toStringAsFixed(2) : '',
     );
@@ -42,6 +49,8 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
 
   @override
   void dispose() {
+    _upiIdController.dispose();
+    _payeeNameController.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -58,13 +67,27 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
   Future<void> _processUPIPayment() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final String upiId = _upiIdController.text.trim();
+    final String payeeName = _payeeNameController.text.trim();
     final double amount = double.parse(_amountController.text);
     final String note = _noteController.text.trim();
 
-    // 1. Construct UPI deep link URI
-    final Uri upiUri = Uri.parse('upi://pay').replace(queryParameters: {
-      'pa': widget.upiId,
-      'pn': widget.payeeName,
+    // 1. Construct UPI deep link URI based on selected app
+    String scheme = 'upi';
+    String path = 'pay';
+    
+    if (_selectedApp == 'phonepe') {
+      scheme = 'phonepe';
+    } else if (_selectedApp == 'gpay') {
+      scheme = 'gpay';
+      path = 'upi/pay';
+    } else if (_selectedApp == 'paytm') {
+      scheme = 'paytmmp';
+    }
+
+    final Uri upiUri = Uri.parse('$scheme://$path').replace(queryParameters: {
+      'pa': upiId,
+      'pn': payeeName,
       'am': amount.toStringAsFixed(2),
       'cu': 'INR',
       if (note.isNotEmpty) 'tn': note,
@@ -102,9 +125,9 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                 Text("No UPI App Found", style: TextStyle(color: Colors.white)),
               ],
             ),
-            content: const Text(
-              "No supported UPI applications (PhonePe, Google Pay, Paytm, etc.) were found on this device. Please install a UPI app to proceed.",
-              style: TextStyle(color: Colors.white70),
+            content: Text(
+              "We could not launch ${_selectedApp == 'upi' ? 'a UPI' : _selectedApp.toUpperCase()} app. Please make sure the selected app is installed on this device.",
+              style: const TextStyle(color: Colors.white70),
             ),
             actions: [
               TextButton(
@@ -120,11 +143,11 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
 
     // 3. Prompt user / Log transaction to DB
     if (mounted) {
-      _showTrackTransactionDialog(amount, note);
+      _showTrackTransactionDialog(upiId, payeeName, amount, note);
     }
   }
 
-  void _showTrackTransactionDialog(double amount, String note) {
+  void _showTrackTransactionDialog(String upiId, String payeeName, double amount, String note) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -139,7 +162,7 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
           ],
         ),
         content: Text(
-          "We opened your UPI app to pay ₹${amount.toStringAsFixed(2)} to ${widget.payeeName}.\n\nWould you like to log this transaction in your ePassbook?",
+          "We opened your UPI app to pay ₹${amount.toStringAsFixed(2)} to $payeeName.\n\nWould you like to log this transaction in your ePassbook?",
           style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
         actions: [
@@ -158,7 +181,7 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context); // Pop dialog
-              await _logTransactionToBackend(amount, note);
+              await _logTransactionToBackend(upiId, payeeName, amount, note);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryPurple,
@@ -171,7 +194,7 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     );
   }
 
-  Future<void> _logTransactionToBackend(double amount, String note) async {
+  Future<void> _logTransactionToBackend(String upiId, String payeeName, double amount, String note) async {
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final entriesProvider = Provider.of<EntriesProvider>(context, listen: false);
@@ -180,10 +203,12 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
       final result = await entriesProvider.saveEntry(
         auth,
         amount: amount,
-        title: 'Paid: ${widget.payeeName}',
-        description: 'UPI ID: ${widget.upiId}${note.isNotEmpty ? " | Note: $note" : ""}',
+        title: 'Paid: $payeeName',
+        description: 'UPI ID: $upiId${note.isNotEmpty ? " | Note: $note" : ""}',
         type: 'SPENDING',
         useSalaryBalance: _useSalaryBalance,
+        salaryMonth: _useSalaryBalance ? DateTime.now().month : null,
+        salaryYear: _useSalaryBalance ? DateTime.now().year : null,
       );
 
       if (mounted) {
@@ -250,7 +275,7 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Payee Info Card
+                    // Payee Info Form Group Card
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -258,38 +283,71 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: AppTheme.border),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const CircleAvatar(
-                            radius: 24,
-                            backgroundColor: AppTheme.primaryPurple,
-                            child: Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
+                          const Row(
+                            children: [
+                              Icon(Icons.storefront_rounded, color: AppTheme.primaryPurple, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                "PAYEE DETAILS",
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.payeeName,
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.upiId,
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _payeeNameController,
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            decoration: InputDecoration(
+                              labelText: 'Payee / Merchant Name',
+                              labelStyle: const TextStyle(fontSize: 12),
+                              hintText: 'e.g. John Doe, Coffee Shop',
+                              filled: true,
+                              fillColor: AppTheme.background.withOpacity(0.3),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppTheme.border),
+                              ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter payee name';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _upiIdController,
+                            style: const TextStyle(color: Colors.white, fontSize: 14),
+                            decoration: InputDecoration(
+                              labelText: 'Payee UPI ID',
+                              labelStyle: const TextStyle(fontSize: 12),
+                              hintText: 'e.g. merchant@upi or name@okaxis',
+                              filled: true,
+                              fillColor: AppTheme.background.withOpacity(0.3),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppTheme.border),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter UPI ID';
+                              }
+                              final trimmed = value.trim();
+                              if (!trimmed.contains('@')) {
+                                return 'Invalid UPI ID format (must contain @)';
+                              }
+                              return null;
+                            },
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // Amount Text Field
                     TextFormField(
@@ -331,7 +389,24 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                         _buildPresetButton(2000, "+ ₹2000"),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
+
+                    // UPI App Chooser Selector
+                    const Text(
+                      "SELECT PAYMENT APP",
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.0),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildAppOption('phonepe', 'PhonePe', Icons.account_balance_wallet_rounded, Colors.purple),
+                        _buildAppOption('gpay', 'Google Pay', Icons.payment_rounded, Colors.blue),
+                        _buildAppOption('paytm', 'Paytm', Icons.credit_card_rounded, Colors.lightBlue),
+                        _buildAppOption('upi', 'Any App', Icons.apps_rounded, Colors.grey),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
 
                     // Transaction Note Field
                     TextFormField(
@@ -390,7 +465,7 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 30),
 
                     // Action Button
                     ElevatedButton(
@@ -434,6 +509,50 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
         child: Text(
           label,
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppOption(String appId, String label, IconData icon, Color activeColor) {
+    final isSelected = _selectedApp == appId;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedApp = appId;
+        });
+      },
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.21,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withOpacity(0.15) : AppTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? activeColor : AppTheme.border,
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: isSelected ? activeColor : AppTheme.background,
+              child: Icon(icon, color: Colors.white, size: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
