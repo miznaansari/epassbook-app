@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
@@ -74,6 +75,74 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     final double amount = double.parse(_amountController.text);
     final String note = _noteController.text.trim();
 
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.payment_rounded, color: AppTheme.primaryPurple, size: 22),
+                SizedBox(width: 8),
+                Text(
+                  "Choose Payment Mode",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "To bypass security limits (like PhonePe's ₹2,000 gallery warning) or deep-link blocks, you can copy the UPI ID and open the app directly to paste it.",
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade400, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _launchDirectLink(upiId, payeeName, amount, note);
+              },
+              icon: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 18),
+              label: const Text("Launch Direct Link (Auto-fill)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryPurple,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _launchCopyPasteFlow(upiId, payeeName, amount, note);
+              },
+              icon: const Icon(Icons.copy_rounded, color: AppTheme.emeraldGreen, size: 18),
+              label: const Text(
+                "Copy UPI ID & Open App (No Limits)",
+                style: TextStyle(color: AppTheme.emeraldGreen, fontWeight: FontWeight.bold),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTheme.emeraldGreen, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchDirectLink(String upiId, String payeeName, double amount, String note) async {
     // 1. Construct UPI deep link URI based on selected app
     String scheme = 'upi';
     String path = 'pay';
@@ -126,41 +195,95 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     }
 
     if (!launched) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: AppTheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Row(
-              children: [
-                Icon(Icons.error_outline_rounded, color: AppTheme.roseRed),
-                SizedBox(width: 8),
-                Text("No UPI App Found", style: TextStyle(color: Colors.white)),
-              ],
-            ),
-            content: Text(
-              "We could not launch ${_selectedApp == 'upi' ? 'a UPI' : _selectedApp.toUpperCase()} app. Please make sure the selected app is installed on this device.",
-              style: const TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK", style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-      }
+      _showAppNotFoundDialog();
       return;
     }
 
     // 3. Prompt user / Log transaction to DB
     if (mounted) {
       _showTrackTransactionDialog(upiId, payeeName, amount, note);
+    }
+  }
+
+  Future<void> _launchCopyPasteFlow(String upiId, String payeeName, double amount, String note) async {
+    // 1. Copy UPI ID to clipboard
+    await Clipboard.setData(ClipboardData(text: upiId));
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("UPI ID '$upiId' copied to clipboard!"),
+          backgroundColor: AppTheme.emeraldGreen,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    // 2. Determine base scheme to launch the app homepage directly
+    String scheme = 'upi://';
+    if (_selectedApp == 'phonepe') {
+      scheme = 'phonepe://';
+    } else if (_selectedApp == 'gpay') {
+      scheme = 'gpay://';
+    } else if (_selectedApp == 'paytm') {
+      scheme = 'paytmmp://';
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // 3. Launch target application homepage
+    bool launched = false;
+    try {
+      launched = await launchUrl(
+        Uri.parse(scheme),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      debugPrint("Error launching base app: $e");
+    }
+
+    if (!launched) {
+      _showAppNotFoundDialog();
+      return;
+    }
+
+    // 4. Prompt user to log transaction
+    if (mounted) {
+      _showTrackTransactionDialog(upiId, payeeName, amount, note);
+    }
+  }
+
+  void _showAppNotFoundDialog() {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: AppTheme.roseRed),
+              SizedBox(width: 8),
+              Text("App Not Launched", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: Text(
+            "We could not launch ${_selectedApp == 'upi' ? 'a UPI' : _selectedApp.toUpperCase()} app. Please make sure it is installed, or try using 'Any App'.",
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK", style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
     }
   }
 
