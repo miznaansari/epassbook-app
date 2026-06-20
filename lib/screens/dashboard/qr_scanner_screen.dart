@@ -97,6 +97,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             payeeName: pn ?? 'Merchant/Payee',
             note: tn ?? '',
             initialAmount: initialAmount,
+            originalQueryParams: uri.queryParameters,
           ),
         ),
       );

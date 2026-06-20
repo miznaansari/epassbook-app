@@ -11,6 +11,7 @@ class UPIPaymentDetailsScreen extends StatefulWidget {
   final String payeeName;
   final String note;
   final double? initialAmount;
+  final Map<String, String>? originalQueryParams;
 
   const UPIPaymentDetailsScreen({
     super.key,
@@ -18,6 +19,7 @@ class UPIPaymentDetailsScreen extends StatefulWidget {
     required this.payeeName,
     required this.note,
     this.initialAmount,
+    this.originalQueryParams,
   });
 
   @override
@@ -87,13 +89,26 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
       path = 'upi/pay';
     }
 
-    final Uri upiUri = Uri.parse('$scheme://$path').replace(queryParameters: {
-      'pa': upiId,
-      'pn': payeeName,
-      'am': amount.toStringAsFixed(2),
-      'cu': 'INR',
-      if (note.isNotEmpty) 'tn': note,
-    });
+    // Merge original query parameters to preserve merchant codes (mc), signatures (sign), transaction IDs (tr, tid)
+    final Map<String, String> queryParams = {};
+    if (widget.originalQueryParams != null) {
+      widget.originalQueryParams!.forEach((key, value) {
+        queryParams[key.toLowerCase()] = value;
+      });
+    }
+
+    // Override with latest edited/entered values
+    queryParams['pa'] = upiId;
+    queryParams['pn'] = payeeName;
+    queryParams['am'] = amount.toStringAsFixed(2);
+    queryParams['cu'] = 'INR';
+    if (note.isNotEmpty) {
+      queryParams['tn'] = note;
+    } else {
+      queryParams.remove('tn');
+    }
+
+    final Uri upiUri = Uri.parse('$scheme://$path').replace(queryParameters: queryParams);
 
     setState(() {
       _isLoading = true;
