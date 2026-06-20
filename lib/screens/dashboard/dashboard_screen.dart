@@ -10,6 +10,7 @@ import '../../models/financial_entry.dart';
 import '../entries/entry_form_sheet.dart';
 import '../main_shell.dart'; // To dispatch TabChangeNotification
 import 'qr_scanner_screen.dart';
+import '../../config/home_widget_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -598,6 +599,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 16),
+
+              // Unified Portfolio Summary Widget
+              _buildUnifiedPortfolioWidget(
+                context,
+                kpis['currentBalance'] ?? 0.0,
+                stockProvider.summary?.totalCurrentValue ?? 0.0,
+                kpis['savings'] ?? 0.0,
+                currency,
+                stockProvider.summary?.totalInvested ?? 0.0,
               ),
 
               // Available Capital Card
@@ -1238,6 +1250,193 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildUnifiedPortfolioWidget(
+    BuildContext context,
+    double currentBalance,
+    double shareValue,
+    double sipValue,
+    String currency,
+    double totalInvested,
+  ) {
+    final currencySymbol = currency == 'INR' ? '₹' : '\$';
+    
+    // Trigger WidgetKit / AppWidget update in background
+    HomeWidgetService.updateWidgetData(
+      availableBalance: currentBalance,
+      shareValue: shareValue,
+      sipValue: sipValue,
+      currencySymbol: currencySymbol,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.08),
+            Colors.white.withOpacity(0.02),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.12),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 15,
+            spreadRadius: -5,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "WEALTH OVERVIEW",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryPurple.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppTheme.primaryPurple.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 10,
+                          color: AppTheme.primaryPurple,
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          "Widget Synced",
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildPortfolioStatItem(
+                      title: "AVAILABLE BALANCE",
+                      value: _formatCurrency(currentBalance, currency),
+                      icon: Icons.account_balance_wallet_rounded,
+                      color: AppTheme.emeraldGreen,
+                    ),
+                  ),
+                  Container(
+                    height: 40,
+                    width: 1,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                  Expanded(
+                    child: _buildPortfolioStatItem(
+                      title: "STOCKS PORTFOLIO",
+                      value: _formatCurrency(shareValue, currency),
+                      icon: Icons.show_chart_rounded,
+                      color: AppTheme.cyanAdvance,
+                    ),
+                  ),
+                  Container(
+                    height: 40,
+                    width: 1,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                  Expanded(
+                    child: _buildPortfolioStatItem(
+                      title: "SAVINGS & SIPS",
+                      value: _formatCurrency(sipValue, currency),
+                      icon: Icons.savings_rounded,
+                      color: AppTheme.secondaryGold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPortfolioStatItem({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 18,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+            letterSpacing: 0.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value.replaceAll(".00", ""),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 
