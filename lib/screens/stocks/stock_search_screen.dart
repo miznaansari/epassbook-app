@@ -20,6 +20,7 @@ class _StockSearchScreenState extends State<StockSearchScreen> with SingleTicker
   final _buyPriceController = TextEditingController();
   bool _createExpense = true;
   String _searchQuery = '';
+  String? _expandedSymbol;
 
   @override
   void initState() {
@@ -283,36 +284,212 @@ class _StockSearchScreenState extends State<StockSearchScreen> with SingleTicker
                 itemBuilder: (context, index) {
                   final h = holdings[index];
                   final returnsColor = h.totalReturns >= 0 ? AppTheme.emeraldGreen : AppTheme.roseRed;
+                  final isExpanded = _expandedSymbol == h.symbol;
                   
                   return Card(
                     color: AppTheme.surface,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: isExpanded ? AppTheme.primaryPurple.withOpacity(0.4) : Colors.white.withOpacity(0.05),
+                        width: isExpanded ? 1.5 : 1.0,
+                      ),
+                    ),
                     margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(h.symbol, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                              const SizedBox(height: 4),
-                              Text("${h.quantity} shares @ ${_formatCurrency(h.buyPrice, currency)}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(_formatCurrency(h.currentValue, currency), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                              const SizedBox(height: 4),
-                              Text(
-                                "${h.totalReturns >= 0 ? '+' : ''}${_formatCurrency(h.totalReturns, currency)} (${h.returnsPercentage.toStringAsFixed(2)}%)",
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: returnsColor),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _expandedSymbol = isExpanded ? null : h.symbol;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                                      color: isExpanded ? AppTheme.primaryPurple : Colors.grey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(h.symbol, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                                        if (h.name.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          SizedBox(
+                                            width: MediaQuery.of(context).size.width * 0.35,
+                                            child: Text(
+                                              h.name,
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(_formatCurrency(h.currentValue, currency), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "${h.totalReturns >= 0 ? '+' : ''}${_formatCurrency(h.totalReturns, currency)} (${h.returnsPercentage.toStringAsFixed(2)}%)",
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: returnsColor),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "${h.quantity} Shares • Avg ${_formatCurrency(h.buyPrice, currency)}",
+                                  style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w500),
+                                ),
+                                Text(
+                                  "Invested: ${_formatCurrency(h.investedValue, currency)}",
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+
+                            if (isExpanded) ...[
+                              const SizedBox(height: 12),
+                              const Divider(color: AppTheme.border, height: 1),
+                              const SizedBox(height: 12),
+                              const Text(
+                                "PURCHASE HISTORY",
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.primaryPurple,
+                                  letterSpacing: 1.2,
+                                ),
                               ),
+                              const SizedBox(height: 8),
+                              ...h.purchases.map((p) {
+                                final pInvested = p.quantity * p.buyPrice;
+                                final pCurrentValue = p.quantity * h.currentPrice;
+                                final pReturns = pCurrentValue - pInvested;
+                                final pReturnsPercentage = p.buyPrice > 0 ? ((h.currentPrice - p.buyPrice) / p.buyPrice) * 100 : 0.0;
+                                final pProfit = pReturns >= 0;
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.background.withOpacity(0.4),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.white.withOpacity(0.02)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              DateFormat('MMM dd, yyyy • hh:mm a').format(p.createdAt.toLocal()),
+                                              style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              "${p.quantity} shares @ ${_formatCurrency(p.buyPrice, currency)}",
+                                              style: const TextStyle(fontSize: 11, color: Colors.white70),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              "Invested: ${_formatCurrency(pInvested, currency)}",
+                                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                "${pProfit ? '+' : ''}${_formatCurrency(pReturns, currency)}",
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: pProfit ? AppTheme.emeraldGreen : AppTheme.roseRed,
+                                                ),
+                                              ),
+                                              Text(
+                                                "${pProfit ? '+' : ''}${pReturnsPercentage.toStringAsFixed(2)}%",
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: pProfit ? AppTheme.emeraldGreen.withOpacity(0.8) : AppTheme.roseRed.withOpacity(0.8),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.roseRed, size: 18),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            onPressed: () async {
+                                              final confirm = await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) => AlertDialog(
+                                                  backgroundColor: AppTheme.surface,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                  title: const Text("Delete Purchase", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                  content: Text("Are you sure you want to delete this purchase transaction of ${p.quantity} shares of ${h.symbol}?", style: const TextStyle(color: Colors.white70)),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(context, false),
+                                                      child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                                                    ),
+                                                    ElevatedButton(
+                                                      onPressed: () => Navigator.pop(context, true),
+                                                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.roseRed),
+                                                      child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                              if (confirm == true) {
+                                                final success = await stockProvider.deleteStockHolding(auth, p.id);
+                                                if (success) {
+                                                  // Refresh dashboard
+                                                  if (context.mounted) {
+                                                    Provider.of<DashboardProvider>(context, listen: false).fetchDashboard(auth);
+                                                  }
+                                                }
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
                             ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );

@@ -38,6 +38,27 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _sessionToken = prefs.getString('session_token');
     
+    if (_sessionToken != null) {
+      try {
+        final response = await http.post(
+          Uri.parse('${AppConfig.baseUrl}/api/auth/verify-user'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': _sessionToken}),
+        );
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = jsonDecode(response.body);
+          if (data['valid'] == true) {
+            _user = UserModel.fromJson(data['user']);
+            _loading = false;
+            notifyListeners();
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint("Error verifying local custom session: $e");
+      }
+    }
+
     _auth.authStateChanges().listen((fb.User? firebaseUser) async {
       _loading = true;
       notifyListeners();
@@ -45,9 +66,10 @@ class AuthProvider extends ChangeNotifier {
       if (firebaseUser != null) {
         await syncUserProfile(firebaseUser);
       } else {
-        _user = null;
-        _sessionToken = null;
-        await prefs.remove('session_token');
+        if (_user == null) {
+          _sessionToken = null;
+          await prefs.remove('session_token');
+        }
         _loading = false;
         notifyListeners();
       }
@@ -232,7 +254,13 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("Error logging out from server session: $e");
     }
+    _user = null;
+    _sessionToken = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('session_token');
     await _auth.signOut();
+    _loading = false;
+    notifyListeners();
   }
 
   Future<bool> updatePreferences(Map<String, dynamic> updateData) async {

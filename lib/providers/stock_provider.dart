@@ -115,6 +115,30 @@ class StockProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> deleteStockHolding(AuthProvider auth, int holdingId) async {
+    _loading = true;
+    notifyListeners();
+
+    try {
+      final response = await http.delete(
+        Uri.parse('${AppConfig.baseUrl}/api/stocks/holdings?id=$holdingId'),
+        headers: auth.headers,
+      );
+
+      if (response.statusCode == 200) {
+        await fetchHoldings(auth);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Error deleting stock holding: $e");
+      return false;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> refreshPrices(AuthProvider auth) async {
     _loading = true;
     notifyListeners();
