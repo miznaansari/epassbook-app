@@ -9,6 +9,7 @@ import '../../providers/entries_provider.dart';
 import '../../models/financial_entry.dart';
 import '../entries/entry_form_sheet.dart';
 import '../main_shell.dart'; // To dispatch TabChangeNotification
+import 'qr_scanner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -503,6 +504,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: () => dashboard.fetchDashboard(auth),
