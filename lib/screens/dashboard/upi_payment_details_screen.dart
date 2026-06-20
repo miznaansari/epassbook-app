@@ -78,11 +78,13 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     
     if (_selectedApp == 'phonepe') {
       scheme = 'phonepe';
+      path = 'upi/pay';
     } else if (_selectedApp == 'gpay') {
       scheme = 'gpay';
       path = 'upi/pay';
     } else if (_selectedApp == 'paytm') {
       scheme = 'paytmmp';
+      path = 'upi/pay';
     }
 
     final Uri upiUri = Uri.parse('$scheme://$path').replace(queryParameters: {
