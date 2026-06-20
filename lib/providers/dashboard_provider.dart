@@ -24,6 +24,11 @@ class DashboardProvider extends ChangeNotifier {
   String _filter = 'current';
   DateTime? _customStart;
   DateTime? _customEnd;
+  Map<String, dynamic> _streaks = {
+    'level1': 0,
+    'level2': 0,
+    'level2Limit': 0.0,
+  };
 
   bool get loading => _loading;
   Map<String, dynamic> get kpis => _kpis;
@@ -34,6 +39,7 @@ class DashboardProvider extends ChangeNotifier {
   String get filter => _filter;
   DateTime? get customStart => _customStart;
   DateTime? get customEnd => _customEnd;
+  Map<String, dynamic> get streaks => _streaks;
 
   void setFilter(String val) {
     _filter = val;
@@ -87,6 +93,15 @@ class DashboardProvider extends ChangeNotifier {
           };
         }
 
+        if (body['streaks'] != null) {
+          final rawStreaks = body['streaks'];
+          _streaks = {
+            'level1': rawStreaks['level1'] ?? 0,
+            'level2': rawStreaks['level2'] ?? 0,
+            'level2Limit': double.parse((rawStreaks['level2Limit'] ?? 0.0).toString()),
+          };
+        }
+
         if (body['recentTransactions'] != null) {
           final List<dynamic> list = body['recentTransactions'];
           _recentTransactions = list.map((e) => FinancialEntry.fromJson(e)).toList();
@@ -104,14 +119,14 @@ class DashboardProvider extends ChangeNotifier {
 
   Future<bool> addSalary(AuthProvider auth, {required double amount, required int month, required int year, required String type}) async {
     try {
+      final endpoint = type == 'SALARY' ? 'salary' : 'bonus';
       final response = await http.post(
-        Uri.parse('${AppConfig.baseUrl}/api/salary'),
+        Uri.parse('${AppConfig.baseUrl}/api/$endpoint'),
         headers: auth.headers,
         body: jsonEncode({
           'amount': amount,
           'month': month,
           'year': year,
-          'type': type, // SALARY or BONUS
         }),
       );
       if (response.statusCode == 200) {
@@ -120,7 +135,7 @@ class DashboardProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint("Error adding salary: $e");
+      debugPrint("Error adding salary/bonus: $e");
       return false;
     }
   }

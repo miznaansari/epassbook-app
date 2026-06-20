@@ -126,9 +126,17 @@ class _MainShellState extends State<MainShell> {
           ],
         ),
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: NotificationListener<TabChangeNotification>(
+        onNotification: (notification) {
+          setState(() {
+            _currentIndex = notification.index;
+          });
+          return true;
+        },
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
       ),
       bottomNavigationBar: CustomNavigationBar(
         currentIndex: _currentIndex,
@@ -136,4 +144,9 @@ class _MainShellState extends State<MainShell> {
       ),
     );
   }
+}
+
+class TabChangeNotification extends Notification {
+  final int index;
+  const TabChangeNotification(this.index);
 }

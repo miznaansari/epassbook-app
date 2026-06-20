@@ -177,7 +177,7 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
 
       final res = await entries.saveEntry(
         auth,
-        id: widget.entryToEdit?.id,
+        id: (widget.entryToEdit?.id == -1) ? null : widget.entryToEdit?.id,
         amount: amt,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
