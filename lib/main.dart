@@ -8,6 +8,7 @@ import 'providers/dashboard_provider.dart';
 import 'providers/entries_provider.dart';
 import 'providers/stock_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/sips_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_shell.dart';
 
@@ -33,6 +34,7 @@ class FintrustApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EntriesProvider()),
         ChangeNotifierProvider(create: (_) => StockProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => SipsProvider()),
       ],
       child: MaterialApp(
         title: 'Fintrust',

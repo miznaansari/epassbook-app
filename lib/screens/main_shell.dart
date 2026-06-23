@@ -8,6 +8,7 @@ import 'entries/history_screen.dart';
 import 'chat/chat_screen.dart';
 import 'settings/settings_screen.dart';
 import 'reports/reports_screen.dart';
+import 'sips/sip_tracker_screen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/entries_provider.dart';
@@ -88,6 +89,17 @@ class _MainShellState extends State<MainShell> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const ReportsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.savings_outlined, color: AppTheme.secondaryGold),
+              title: const Text("SIP Tracker", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SipTrackerScreen()),
                 );
               },
             ),
