@@ -331,7 +331,7 @@ class _ChatScreenState extends State<ChatScreen> {
         margin: const EdgeInsets.only(bottom: 12.0),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
         ),
         decoration: BoxDecoration(
           color: isUser ? AppTheme.primaryPurple : AppTheme.surface,
@@ -343,10 +343,363 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           border: isUser ? null : Border.all(color: AppTheme.border),
         ),
-        child: Text(
-          content,
-          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.35),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: _parseMessageContent(content, context, isUser),
         ),
+      ),
+    );
+  }
+
+  List<Widget> _parseMessageContent(String content, BuildContext context, bool isUser) {
+    if (content.isEmpty) return [];
+
+    final lines = content.split('\n');
+    final List<Widget> widgets = [];
+    
+    List<String>? currentTableHeaders;
+    List<List<String>>? currentTableRows;
+    
+    List<String>? currentListItems;
+    bool isOrderedList = false;
+    
+    List<String> currentParagraphLines = [];
+
+    void flushParagraph() {
+      if (currentParagraphLines.isNotEmpty) {
+        final text = currentParagraphLines.join('\n').trim();
+        if (text.isNotEmpty) {
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: _buildFormattedText(text, isUser),
+            ),
+          );
+        }
+        currentParagraphLines.clear();
+      }
+    }
+
+    void flushTable() {
+      if (currentTableHeaders != null && currentTableRows != null) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: _buildTableWidget(currentTableHeaders!, currentTableRows!, context),
+          ),
+        );
+        currentTableHeaders = null;
+        currentTableRows = null;
+      }
+    }
+
+    void flushList() {
+      if (currentListItems != null) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: List.generate(currentListItems!.length, (index) {
+                final itemText = currentListItems![index];
+                final bullet = isOrderedList ? "${index + 1}. " : "• ";
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0, left: 4.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bullet,
+                        style: TextStyle(
+                          color: isUser ? Colors.white : Colors.white70,
+                          fontSize: 13.0,
+                          height: 1.3,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildFormattedText(itemText, isUser),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ),
+        );
+        currentListItems = null;
+      }
+    }
+
+    void flushAll() {
+      flushParagraph();
+      flushTable();
+      flushList();
+    }
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final trimmed = line.trim();
+
+      // 1. Table parsing
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        flushParagraph();
+        flushList();
+
+        final rawCells = line.split('|');
+        final cells = rawCells.sublist(1, rawCells.length - 1).map((c) => c.trim()).toList();
+        final isSeparator = cells.every((c) => RegExp(r'^:?-+:?$').hasMatch(c));
+
+        if (isSeparator) {
+          continue;
+        }
+
+        if (currentTableHeaders == null) {
+          currentTableHeaders = cells;
+          currentTableRows = [];
+        } else {
+          final rowCells = List<String>.from(cells);
+          while (rowCells.length < currentTableHeaders!.length) {
+            rowCells.add('');
+          }
+          currentTableRows!.add(rowCells.sublist(0, currentTableHeaders!.length));
+        }
+      }
+      // 2. Unordered list parsing
+      else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        flushParagraph();
+        flushTable();
+
+        final itemText = trimmed.substring(2).trim();
+        if (currentListItems != null && !isOrderedList) {
+          currentListItems!.add(itemText);
+        } else {
+          flushList();
+          isOrderedList = false;
+          currentListItems = [itemText];
+        }
+      }
+      // 3. Ordered list parsing
+      else if (RegExp(r'^\d+\.\s').hasMatch(trimmed)) {
+        flushParagraph();
+        flushTable();
+
+        final match = RegExp(r'^(\d+)\.\s(.*)').firstMatch(trimmed);
+        final itemText = match != null ? match.group(2)!.trim() : trimmed;
+        if (currentListItems != null && isOrderedList) {
+          currentListItems!.add(itemText);
+        } else {
+          flushList();
+          isOrderedList = true;
+          currentListItems = [itemText];
+        }
+      }
+      // 4. Horizontal Rule
+      else if (trimmed == '---' || trimmed == '***') {
+        flushAll();
+        widgets.add(
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Divider(color: Colors.white12, height: 1),
+          ),
+        );
+      }
+      // 5. Normal text / empty line
+      else {
+        if (trimmed.isEmpty) {
+          flushAll();
+        } else {
+          flushTable();
+          flushList();
+          currentParagraphLines.add(line);
+        }
+      }
+    }
+
+    flushAll();
+    return widgets;
+  }
+
+  Widget _buildFormattedText(String text, bool isUser) {
+    final List<TextSpan> spans = [];
+    final regex = RegExp(r'(\*\*[^*]+\*\*|`[^`]+`)');
+    
+    int lastMatchEnd = 0;
+    final matches = regex.allMatches(text);
+    
+    for (final match in matches) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastMatchEnd, match.start),
+          style: TextStyle(color: isUser ? Colors.white : Colors.white70),
+        ));
+      }
+      
+      final matchText = match.group(0)!;
+      if (matchText.startsWith('**') && matchText.endsWith('**')) {
+        spans.add(TextSpan(
+          text: matchText.substring(2, matchText.length - 2),
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ));
+      } else if (matchText.startsWith('`') && matchText.endsWith('`')) {
+        spans.add(TextSpan(
+          text: matchText.substring(1, matchText.length - 1),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            color: Colors.cyanAccent.shade200,
+            backgroundColor: Colors.black26,
+          ),
+        ));
+      }
+      
+      lastMatchEnd = match.end;
+    }
+    
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
+        style: TextStyle(color: isUser ? Colors.white : Colors.white70),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13.0, height: 1.35),
+        children: spans.isEmpty 
+          ? [TextSpan(text: text, style: TextStyle(color: isUser ? Colors.white : Colors.white70))] 
+          : spans,
+      ),
+    );
+  }
+
+  Widget _buildTableWidget(List<String> headers, List<List<String>> rows, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6.0),
+      decoration: BoxDecoration(
+        color: AppTheme.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border, width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Padding(
+          padding: const EdgeInsets.all(6.0),
+          child: Table(
+            defaultColumnWidth: const IntrinsicColumnWidth(),
+            border: const TableBorder(
+              horizontalInside: BorderSide(color: AppTheme.border, width: 0.5),
+            ),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                ),
+                children: headers.map((h) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                  child: Text(
+                    h,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                )).toList(),
+              ),
+              ...rows.map((row) => TableRow(
+                children: row.map((cell) {
+                  final trimmed = cell.trim();
+                  Color? textColor;
+                  FontWeight? fontWeight;
+                  
+                  if (trimmed.startsWith('+')) {
+                    textColor = AppTheme.emeraldGreen;
+                    fontWeight = FontWeight.bold;
+                  } else if (trimmed.startsWith('-') && !trimmed.startsWith('---')) {
+                    textColor = AppTheme.roseRed;
+                    fontWeight = FontWeight.bold;
+                  }
+                  
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                    child: _buildTableCellFormattedText(trimmed, textColor, fontWeight),
+                  );
+                }).toList(),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableCellFormattedText(String text, Color? overrideColor, FontWeight? overrideWeight) {
+    final List<TextSpan> spans = [];
+    final regex = RegExp(r'(\*\*[^*]+\*\*|`[^`]+`)');
+    
+    int lastMatchEnd = 0;
+    final matches = regex.allMatches(text);
+    
+    for (final match in matches) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastMatchEnd, match.start),
+          style: TextStyle(
+            color: overrideColor ?? Colors.white70,
+            fontWeight: overrideWeight,
+          ),
+        ));
+      }
+      
+      final matchText = match.group(0)!;
+      if (matchText.startsWith('**') && matchText.endsWith('**')) {
+        spans.add(TextSpan(
+          text: matchText.substring(2, matchText.length - 2),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: overrideColor ?? Colors.white,
+          ),
+        ));
+      } else if (matchText.startsWith('`') && matchText.endsWith('`')) {
+        spans.add(TextSpan(
+          text: matchText.substring(1, matchText.length - 1),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            color: Colors.cyanAccent.shade200,
+            backgroundColor: Colors.black26,
+          ),
+        ));
+      }
+      
+      lastMatchEnd = match.end;
+    }
+    
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
+        style: TextStyle(
+          color: overrideColor ?? Colors.white70,
+          fontWeight: overrideWeight,
+        ),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 12.0, height: 1.3),
+        children: spans.isEmpty 
+          ? [
+              TextSpan(
+                text: text,
+                style: TextStyle(
+                  color: overrideColor ?? Colors.white70,
+                  fontWeight: overrideWeight,
+                ),
+              )
+            ] 
+          : spans,
       ),
     );
   }

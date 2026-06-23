@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import '../../config/constants.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/entries_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import 'upi_payment_details_screen.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -10,7 +16,7 @@ class QRScannerScreen extends StatefulWidget {
   State<QRScannerScreen> createState() => _QRScannerScreenState();
 }
 
-class _QRScannerScreenState extends State<QRScannerScreen> {
+class _QRScannerScreenState extends State<QRScannerScreen> with WidgetsBindingObserver {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
@@ -18,13 +24,300 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   );
   bool _isProcessing = false;
 
+  // Pending payment states for logging on return
+  bool _waitingForPaymentReturn = false;
+  String? _pendingUpiId;
+  String? _pendingPayeeName;
+  double? _pendingAmount;
+  String? _pendingNote;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _waitingForPaymentReturn) {
+      _waitingForPaymentReturn = false;
+      _showLogTransactionDialog();
+    }
+  }
+
+  void _showLogTransactionDialog() {
+    final TextEditingController amountController = TextEditingController(
+      text: _pendingAmount != null ? _pendingAmount!.toStringAsFixed(2) : '',
+    );
+    final TextEditingController noteController = TextEditingController(text: _pendingNote ?? '');
+    bool useSalaryBalance = true;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppTheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Row(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded, color: AppTheme.emeraldGreen),
+                  SizedBox(width: 8),
+                  Text("Log Transaction?", style: TextStyle(color: Colors.white, fontSize: 16)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      "You scanned the QR for ${_pendingPayeeName ?? 'Merchant'}.\nWould you like to log this spending in your ePassbook?",
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: "AMOUNT PAID (INR)",
+                        labelStyle: const TextStyle(color: Colors.grey, fontSize: 10),
+                        prefixText: "₹ ",
+                        prefixStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        filled: true,
+                        fillColor: AppTheme.background.withOpacity(0.3),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: noteController,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: "NOTE (OPTIONAL)",
+                        labelStyle: const TextStyle(color: Colors.grey, fontSize: 10),
+                        filled: true,
+                        fillColor: AppTheme.background.withOpacity(0.3),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Deduct from Salary",
+                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        Switch(
+                          value: useSalaryBalance,
+                          activeColor: AppTheme.emeraldGreen,
+                          onChanged: (val) {
+                            setDialogState(() {
+                              useSalaryBalance = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.secondaryGold.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.secondaryGold.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.warning_amber_rounded, color: AppTheme.secondaryGold, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                "Payment Failed or Limit Error?",
+                                style: TextStyle(
+                                  color: AppTheme.secondaryGold,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            "UPI apps block direct intents > ₹2,000. Copy the UPI ID and pay manually to bypass it.",
+                            style: TextStyle(color: Colors.white70, fontSize: 10),
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: _pendingUpiId ?? ''));
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("UPI ID copied! Opening UPI app..."),
+                                    backgroundColor: AppTheme.emeraldGreen,
+                                  ),
+                                );
+                              }
+                              try {
+                                await launchUrl(
+                                  Uri.parse("upi://"),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } catch (e) {
+                                debugPrint("Error launching base upi: $e");
+                              }
+                            },
+                            icon: const Icon(Icons.copy_rounded, size: 12, color: Colors.white),
+                            label: const Text(
+                              "Copy UPI & Open App",
+                              style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.secondaryGold,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          Navigator.pop(context); // Close dialog
+                          if (mounted) Navigator.pop(context); // Close scan screen
+                        },
+                  child: const Text("Discard", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final amtStr = amountController.text.trim();
+                          final amt = double.tryParse(amtStr) ?? 0.0;
+                          if (amt <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Please enter a valid amount"),
+                                backgroundColor: AppTheme.roseRed,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSaving = true;
+                          });
+
+                          await _logTransactionToBackend(
+                            _pendingUpiId ?? '',
+                            _pendingPayeeName ?? 'Merchant',
+                            amt,
+                            noteController.text.trim(),
+                            useSalaryBalance,
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close dialog
+                            Navigator.pop(context); // Close scan screen
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryPurple,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text("Log Spending", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _logTransactionToBackend(
+    String upiId,
+    String payeeName,
+    double amount,
+    String note,
+    bool useSalaryBalance,
+  ) async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final entriesProvider = Provider.of<EntriesProvider>(context, listen: false);
+      final dashboardProvider = Provider.of<DashboardProvider>(context, listen: false);
+
+      final result = await entriesProvider.saveEntry(
+        auth,
+        amount: amount,
+        title: 'Paid: $payeeName',
+        description: 'UPI ID: $upiId${note.isNotEmpty ? " | Note: $note" : ""}',
+        type: 'SPENDING',
+        useSalaryBalance: useSalaryBalance,
+        salaryMonth: useSalaryBalance ? DateTime.now().month : null,
+        salaryYear: useSalaryBalance ? DateTime.now().year : null,
+      );
+
+      if (result['success'] == true) {
+        await dashboardProvider.fetchDashboard(auth);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("UPI Transaction logged successfully!"),
+              backgroundColor: AppTheme.emeraldGreen,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? "Failed to save transaction"),
+              backgroundColor: AppTheme.roseRed,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error logging transaction: $e"),
+            backgroundColor: AppTheme.roseRed,
+          ),
+        );
+      }
+    }
+  }
+
+  void _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
 
     final List<Barcode> barcodes = capture.barcodes;
@@ -41,7 +334,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     // Check if it's a valid UPI URI
     if (!normalized.startsWith('upi://pay')) {
       debugPrint("Scanner error: Detected non-UPI QR code.");
-      // Show error snackbar but limit toast flooding
       setState(() {
         _isProcessing = true;
       });
@@ -70,11 +362,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     // Parse parameters
     try {
       final Uri uri = Uri.parse(trimmed);
-      // Support both lowercase and uppercase parameters
-      final String? pa = uri.queryParameters['pa'] ?? uri.queryParameters['PA']; // UPI ID
-      final String? pn = uri.queryParameters['pn'] ?? uri.queryParameters['PN']; // Payee Name
-      final String? tn = uri.queryParameters['tn'] ?? uri.queryParameters['TN']; // Transaction Note
-      final String? amStr = uri.queryParameters['am'] ?? uri.queryParameters['AM']; // Amount
+      final String? pa = uri.queryParameters['pa'] ?? uri.queryParameters['PA'];
+      final String? pn = uri.queryParameters['pn'] ?? uri.queryParameters['PN'];
+      final String? tn = uri.queryParameters['tn'] ?? uri.queryParameters['TN'];
+      final String? amStr = uri.queryParameters['am'] ?? uri.queryParameters['AM'];
 
       debugPrint("Parsed UPI details - pa: '$pa', pn: '$pn', tn: '$tn', am: '$amStr'");
 
@@ -87,20 +378,50 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         initialAmount = double.tryParse(amStr);
       }
 
-      // Stop scanner and navigate
+      // Stop scanner
       _controller.stop();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => UPIPaymentDetailsScreen(
-            upiId: pa,
-            payeeName: pn ?? 'Merchant/Payee',
-            note: tn ?? '',
-            initialAmount: initialAmount,
-            originalQueryParams: uri.queryParameters,
-          ),
-        ),
-      );
+
+      // Save details for returning to app
+      _pendingUpiId = pa;
+      _pendingPayeeName = pn ?? 'Merchant/Payee';
+      _pendingAmount = initialAmount;
+      _pendingNote = tn ?? '';
+      _waitingForPaymentReturn = true;
+
+      // Launch URL directly using standard system chooser
+      final Uri upiUri = Uri.parse(trimmed);
+      bool launched = false;
+      try {
+        launched = await launchUrl(
+          upiUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (e) {
+        debugPrint("Error launching UPI directly: $e");
+      }
+
+      if (!launched) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Direct launch failed. Redirecting to manual screen..."),
+              backgroundColor: AppTheme.roseRed,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => UPIPaymentDetailsScreen(
+                upiId: pa,
+                payeeName: pn ?? 'Merchant/Payee',
+                note: tn ?? '',
+                initialAmount: initialAmount,
+                originalQueryParams: uri.queryParameters,
+              ),
+            ),
+          );
+        }
+      }
     } catch (e) {
       debugPrint("Error parsing UPI details: $e");
       ScaffoldMessenger.of(context).showSnackBar(

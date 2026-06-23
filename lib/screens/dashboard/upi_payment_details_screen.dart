@@ -27,7 +27,7 @@ class UPIPaymentDetailsScreen extends StatefulWidget {
   State<UPIPaymentDetailsScreen> createState() => _UPIPaymentDetailsScreenState();
 }
 
-class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
+class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _upiIdController;
   late TextEditingController _payeeNameController;
@@ -37,9 +37,17 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
   bool _isLoading = false;
   String _selectedApp = 'upi'; // 'phonepe', 'gpay', 'paytm', 'upi'
 
+  // App lifecycle return tracking
+  bool _waitingForPaymentReturn = false;
+  String? _pendingUpiId;
+  String? _pendingPayeeName;
+  double? _pendingAmount;
+  String? _pendingNote;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _upiIdController = TextEditingController(text: widget.upiId);
     _payeeNameController = TextEditingController(
       text: widget.payeeName == 'Merchant/Payee' ? '' : widget.payeeName,
@@ -48,15 +56,39 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
       text: widget.initialAmount != null ? widget.initialAmount!.toStringAsFixed(2) : '',
     );
     _noteController = TextEditingController(text: widget.note);
+    _amountController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _upiIdController.dispose();
     _payeeNameController.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _waitingForPaymentReturn) {
+      _waitingForPaymentReturn = false;
+      setState(() {
+        _isLoading = false;
+      });
+      if (_pendingUpiId != null && _pendingPayeeName != null && _pendingAmount != null) {
+        _showTrackTransactionDialog(
+          _pendingUpiId!,
+          _pendingPayeeName!,
+          _pendingAmount!,
+          _pendingNote ?? '',
+        );
+      }
+    }
   }
 
   void _addAmountPreset(double value) {
@@ -195,14 +227,19 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     }
 
     if (!launched) {
+      setState(() {
+        _isLoading = false;
+      });
       _showAppNotFoundDialog();
       return;
     }
 
-    // 3. Prompt user / Log transaction to DB
-    if (mounted) {
-      _showTrackTransactionDialog(upiId, payeeName, amount, note);
-    }
+    // Save pending details to show dialog on return
+    _pendingUpiId = upiId;
+    _pendingPayeeName = payeeName;
+    _pendingAmount = amount;
+    _pendingNote = note;
+    _waitingForPaymentReturn = true;
   }
 
   Future<void> _launchCopyPasteFlow(String upiId, String payeeName, double amount, String note) async {
@@ -245,14 +282,19 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
     }
 
     if (!launched) {
+      setState(() {
+        _isLoading = false;
+      });
       _showAppNotFoundDialog();
       return;
     }
 
-    // 4. Prompt user to log transaction
-    if (mounted) {
-      _showTrackTransactionDialog(upiId, payeeName, amount, note);
-    }
+    // Save pending details to show dialog on return
+    _pendingUpiId = upiId;
+    _pendingPayeeName = payeeName;
+    _pendingAmount = amount;
+    _pendingNote = note;
+    _waitingForPaymentReturn = true;
   }
 
   void _showAppNotFoundDialog() {
@@ -529,6 +571,30 @@ class _UPIPaymentDetailsScreenState extends State<UPIPaymentDetailsScreen> {
                         _buildPresetButton(2000, "+ ₹2000"),
                       ],
                     ),
+                    if ((double.tryParse(_amountController.text.trim()) ?? 0.0) > 2000) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.secondaryGold.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.secondaryGold.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Icon(Icons.warning_amber_rounded, color: AppTheme.secondaryGold, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "Deep link payments > ₹2,000 are frequently blocked by UPI apps for security. We highly recommend using the 'Copy UPI ID & Open App' option when launching.",
+                                style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
 
                     // UPI App Chooser Selector
