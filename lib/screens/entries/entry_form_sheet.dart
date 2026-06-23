@@ -45,10 +45,86 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
   Map<String, dynamic>? _insufficientInfo;
   final List<String> _checkedMonths = []; // keys formatted as "year-month"
 
+  // Title autocomplete/autofill state
+  final _titleFocusNode = FocusNode();
+  List<FinancialEntry> _filteredSuggestions = [];
+  bool _showSuggestions = false;
+
   @override
   void initState() {
     super.initState();
     _initializeForm();
+    _titleController.addListener(_onTitleChanged);
+    _titleFocusNode.addListener(_onTitleFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPastEntries();
+    });
+  }
+
+  void _onTitleFocusChanged() {
+    setState(() {
+      _showSuggestions = _titleFocusNode.hasFocus;
+    });
+  }
+
+  void _onTitleChanged() {
+    if (!_showSuggestions) return;
+
+    final query = _titleController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
+      return;
+    }
+
+    final entriesProvider = Provider.of<EntriesProvider>(context, listen: false);
+    final entries = entriesProvider.entries;
+    final Map<String, FinancialEntry> suggestionsMap = {};
+
+    for (final entry in entries) {
+      final etitle = entry.title.trim();
+      final key = etitle.toLowerCase();
+
+      // Filter out exact matches to avoid suggesting what's already typed
+      if (key.contains(query) && etitle != _titleController.text) {
+        final existing = suggestionsMap[key];
+        if (existing == null || entry.date.isAfter(existing.date)) {
+          suggestionsMap[key] = entry;
+        }
+      }
+    }
+
+    final sortedList = suggestionsMap.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    setState(() {
+      _filteredSuggestions = sortedList.take(3).toList();
+    });
+  }
+
+  Future<void> _loadPastEntries() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final entries = Provider.of<EntriesProvider>(context, listen: false);
+      await entries.fetchEntries(auth);
+    } catch (e) {
+      debugPrint("Error loading past entries for autocomplete: $e");
+    }
+  }
+
+  void _handleSelectSuggestion(FinancialEntry suggestion) {
+    setState(() {
+      _titleController.text = suggestion.title;
+      _amountController.text = suggestion.amount.toString();
+      _type = suggestion.type;
+      _useSalaryBalance = suggestion.useSalaryBalance;
+      _salaryMonth = DateTime.now().month;
+      _salaryYear = DateTime.now().year;
+      _filteredSuggestions = [];
+      _showSuggestions = false;
+      _titleFocusNode.unfocus();
+    });
   }
 
   void _initializeForm() {
@@ -77,6 +153,9 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
 
   @override
   void dispose() {
+    _titleController.removeListener(_onTitleChanged);
+    _titleFocusNode.removeListener(_onTitleFocusChanged);
+    _titleFocusNode.dispose();
     _amountController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
@@ -244,11 +323,13 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
           padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _splitViewOpen
-                  ? _buildSplitDeductionView(currencySymbol, computedAllocations, remainingToAllocate)
-                  : _buildMainFormView(currencySymbol, months, years),
+            child: SingleChildScrollView(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _splitViewOpen
+                    ? _buildSplitDeductionView(currencySymbol, computedAllocations, remainingToAllocate)
+                    : _buildMainFormView(currencySymbol, months, years),
+              ),
             ),
           ),
         ),
@@ -397,6 +478,7 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
         // Title
         TextFormField(
           controller: _titleController,
+          focusNode: _titleFocusNode,
           decoration: InputDecoration(
             labelText: 'TITLE',
             hintText: 'e.g. Rent, Grocery bills',
@@ -409,6 +491,63 @@ class _EntryFormSheetState extends State<EntryFormSheet> {
             return null;
           },
         ),
+        
+        if (_filteredSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _filteredSuggestions.length,
+              separatorBuilder: (context, index) => Divider(
+                color: Colors.white.withOpacity(0.04),
+                height: 1,
+              ),
+              itemBuilder: (context, index) {
+                final suggestion = _filteredSuggestions[index];
+                return ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  title: Text(
+                    suggestion.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                  ),
+                  subtitle: Text(
+                    suggestion.type,
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          "Autofill ",
+                          style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          "$currencySymbol${suggestion.amount.toStringAsFixed(2)}",
+                          style: const TextStyle(fontSize: 11, color: AppTheme.primaryPurple, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  onTap: () => _handleSelectSuggestion(suggestion),
+                );
+              },
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         // Description

@@ -610,6 +610,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 kpis['savings'] ?? 0.0,
                 currency,
                 stockProvider.summary?.totalInvested ?? 0.0,
+                kpis['salaryBalance'] ?? 0.0,
               ),
 
               // Available Capital Card
@@ -1260,6 +1261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double sipValue,
     String currency,
     double totalInvested,
+    double salaryBalance,
   ) {
     final currencySymbol = currency == 'INR' ? '₹' : '\$';
     
@@ -1307,7 +1309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "WEALTH OVERVIEW",
+                    "TOTAL ASSETS OVERVIEW",
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
@@ -1352,8 +1354,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Expanded(
                     child: _buildPortfolioStatItem(
-                      title: "AVAILABLE BALANCE",
-                      value: _formatCurrency(currentBalance, currency),
+                      title: "SALARY BALANCE",
+                      value: _formatCurrency(salaryBalance, currency),
                       icon: Icons.account_balance_wallet_rounded,
                       color: AppTheme.emeraldGreen,
                     ),
@@ -1365,9 +1367,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   Expanded(
                     child: _buildPortfolioStatItem(
-                      title: "STOCKS PORTFOLIO",
-                      value: _formatCurrency(shareValue, currency),
-                      icon: Icons.show_chart_rounded,
+                      title: "TOTAL ASSETS",
+                      value: _formatCurrency(salaryBalance + sipValue, currency),
+                      icon: Icons.assured_workload_rounded,
                       color: AppTheme.cyanAdvance,
                     ),
                   ),
