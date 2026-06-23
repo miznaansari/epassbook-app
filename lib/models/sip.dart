@@ -75,17 +75,51 @@ class Sip {
   }
 }
 
+class SipTransaction {
+  final int id;
+  final String title;
+  final double amount;
+  final DateTime date;
+
+  SipTransaction({
+    required this.id,
+    required this.title,
+    required this.amount,
+    required this.date,
+  });
+
+  factory SipTransaction.fromJson(Map<String, dynamic> json) {
+    return SipTransaction(
+      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
+      title: json['title'] ?? '',
+      amount: double.parse(json['amount'].toString()),
+      date: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'amount': amount,
+      'date': date.toIso8601String(),
+    };
+  }
+}
+
 class SipPeriod {
   final String label;
   final DateTime targetDate;
   final String status; // PAID, MISSED, PENDING
   final bool isPaid;
+  final SipTransaction? transaction;
 
   SipPeriod({
     required this.label,
     required this.targetDate,
     required this.status,
     required this.isPaid,
+    this.transaction,
   });
 
   factory SipPeriod.fromJson(Map<String, dynamic> json) {
@@ -96,6 +130,9 @@ class SipPeriod {
           : DateTime.now(),
       status: json['status'] ?? 'PENDING',
       isPaid: json['isPaid'] ?? false,
+      transaction: json['transaction'] != null
+          ? SipTransaction.fromJson(json['transaction'])
+          : null,
     );
   }
 
@@ -105,6 +142,7 @@ class SipPeriod {
       'targetDate': targetDate.toIso8601String(),
       'status': status,
       'isPaid': isPaid,
+      'transaction': transaction?.toJson(),
     };
   }
 }

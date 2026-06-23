@@ -453,6 +453,79 @@ class _SipTrackerScreenState extends State<SipTrackerScreen> {
     );
   }
 
+  // Open Paid Transaction Detail Modal
+  void _showPaidTransactionDialog(BuildContext context, SipTransaction? transaction) {
+    if (transaction == null) return;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final currency = auth.user?.currency ?? 'USD';
+    final dateFormatted = DateFormat('dd MMM yyyy').format(transaction.date);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.check_circle_rounded, color: AppTheme.emeraldGreen),
+            SizedBox(width: 8),
+            Text("Successful Transaction"),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "This SIP cycle has been successfully paid and recorded in your ledger.",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Text("Transaction Title: ${transaction.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text("Category: ", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryPurple.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    "SAVINGS",
+                    style: TextStyle(color: AppTheme.primaryPurple, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text("Payment Date: $dateFormatted", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 12),
+            const Divider(color: AppTheme.border),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Amount:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(
+                  _formatCurrency(transaction.amount, currency),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.emeraldGreen),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Okay", style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -713,7 +786,7 @@ class _SipTrackerScreenState extends State<SipTrackerScreen> {
 
                               return GestureDetector(
                                 onTap: period.isPaid
-                                    ? null
+                                    ? () => _showPaidTransactionDialog(context, period.transaction)
                                     : () => _showConfirmTransactionDialog(context, sip, period),
                                 child: Container(
                                   margin: const EdgeInsets.only(right: 12),
